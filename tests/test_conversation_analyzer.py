@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from src.conversation_analyzer import analyze_conversation
 
 
@@ -32,3 +34,24 @@ def test_returns_safe_result_for_empty_text():
 
     assert result["quality_score"] == 0
     assert result["findings"] == []
+
+
+def test_analyze_conversation_uses_structured_model_response():
+    client = MagicMock()
+    client.chat.completions.create.return_value.choices[0].message.content = """
+    {
+      "quality_score": 45,
+      "priority": "P0",
+      "findings": [{"type": "问题未解决", "reason": "客服没有提供处理路径。"}],
+      "root_cause": "客服未查询订单状态，也未告知升级渠道。",
+      "suggestion": "先查询订单，再说明时效和升级方式。"
+    }
+    """
+
+    result = analyze_conversation("用户：订单没到账。\n客服：不清楚。", client)
+
+    assert result["quality_score"] == 45
+    assert result["priority"] == "P0"
+    assert result["findings"][0]["type"] == "问题未解决"
+    assert result["root_cause"] == "客服未查询订单状态，也未告知升级渠道。"
+    assert client.chat.completions.create.call_count == 1
